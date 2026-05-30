@@ -19,6 +19,7 @@ sudo sshd -t
 ## Secrets
 
 - Do not print secret values in the final report.
+- Do not use shell tracing (`set -x` or `set -o xtrace`) in commands that assign, write, or pass secrets.
 - If generating passwords, generate strong random values and clearly mark them as secrets for the user to store.
 - Do not commit secrets into files intended for Git.
 - Use `.env` files on the server with restrictive permissions.
