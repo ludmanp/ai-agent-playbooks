@@ -1,0 +1,4 @@
+interface:
+  display_name: "Laravel Docker First Deploy"
+  short_description: "First deploy Laravel with Docker"
+  default_prompt: "Use $laravel-docker-first-deploy to deploy a Laravel app to a Docker server for the first time."
