@@ -23,6 +23,7 @@ sudo sshd -t
 - If generating passwords, generate strong random values and clearly mark them as secrets for the user to store.
 - Do not commit secrets into files intended for Git.
 - Use `.env` files on the server with restrictive permissions.
+- Do not `source` or execute `.env` files that contain secrets; parse them as data because passwords may contain shell metacharacters.
 
 ## Stop Conditions
 
