@@ -1,97 +1,80 @@
 ---
 name: laravel-docker-first-deploy
-description: Use this skill when deploying a Laravel application to a Docker/Traefik server for the first time. It creates the initial server-side app layout, Docker Compose stack, PHP-FPM/nginx runtime, environment file, optional workers, and first-run Laravel setup. It is for first deploy only, not routine updates or rollback workflows.
+description: Use when deploying a Laravel application to a Docker/Traefik server for the first time, and that server has no existing app checkout, Compose stack, or production .env for it. Not for routine update deploys, rollbacks, or release-symlink workflows.
 ---
 
 # Laravel Docker First Deploy
 
-## Purpose
+## Overview
 
-Perform the first deployment of a Laravel app onto a prepared Docker server. The default runtime is PHP-FPM plus nginx behind Traefik, with MySQL reached over an external Docker network. All Composer, npm, and Artisan commands run inside containers, not on the host.
+First deployment of a Laravel app onto an already-prepared Docker server. The runtime is PHP-FPM plus nginx behind Traefik, with MySQL reached over an external Docker network. Every Composer, npm, and Artisan command runs inside a container, never on the host.
 
-This skill assumes the server already has Docker, Docker Compose, Traefik, and optionally MySQL prepared. For server preparation, use a separate server setup playbook.
-
-## Scope
-
-This skill does:
-
-- clone or place the first app checkout under `/var/www/<app-name>`;
-- create Docker/deployment files under `/srv/devops/<app-name>`;
-- create or install a production `.env` with secret-safe handling;
-- generate PHP-FPM, nginx, and Docker Compose configuration;
-- build and start the full Compose project with `docker compose up -d --build`;
-- run first-deploy app setup inside containers;
-- optionally configure workers or scheduler;
-- verify HTTPS, containers, Laravel health, and logs.
-
-This skill does not:
-
-- implement routine update deploys;
-- implement rollbacks or release symlink deployment;
-- assume npm exists in every project;
-- hardcode app-specific startup commands unless the user provides them;
-- print secrets into chat or logs.
+**REQUIRED PREREQUISITE:** the server must already have Docker, Docker Compose, Traefik, and optionally MySQL. If it does not, use `hetzner-laravel-docker-server` first.
 
 ## Defaults
 
-- App code path: `/var/www/<app-name>`.
-- DevOps path: `/srv/devops/<app-name>`.
-- Web root: `public`.
-- Traefik network: `proxy`.
-- MySQL network: `mysql8_network`.
-- Runtime user for Laravel commands: `www-data`.
-- Worker mode: `none`.
-- Scheduler mode: `none`.
+| Setting | Default |
+|---|---|
+| App code path | `/var/www/<app-name>` |
+| DevOps path | `/srv/devops/<app-name>` |
+| Web root | `public` |
+| Traefik network | `proxy` |
+| MySQL network | `mysql8_network` |
+| Runtime user for Laravel commands | `www-data` |
+| Worker mode | `none` |
+| Scheduler mode | `none` |
 
-Allow explicit overrides when the user or project requires them.
+Override any of these when the user or the project requires it.
 
 ## Workflow
 
-1. **Collect inputs**
-   - Read `references/inputs.md`.
-   - Ask only for missing values needed for the next phase.
-   - Treat secrets as sensitive. Do not echo them.
+Read the reference file at each phase. Do not work from this table alone: it names the phases, the reference files carry the commands.
 
-2. **Preflight server and app**
-   - Read `references/server-preflight.md`.
-   - Verify SSH, Docker, networks, DNS, app path, and whether this is really a first deploy.
+| Phase | Reference | Stop condition |
+|---|---|---|
+| 1. Collect inputs | `references/inputs.md` | ask only for what the next phase needs |
+| 2. Preflight server and app | `references/server-preflight.md` | stop when DNS, Docker, or networks are not ready |
+| 3. Create layout | `references/layout.md` | stop when the app path exists and reuse is unconfirmed |
+| 4. Prepare `.env` | `references/env-strategy.md` | stop when required keys cannot be resolved |
+| 5. Generate Docker files | `references/templates.md` | — |
+| 6. Workers and scheduler | `references/workers.md` | skip the phase entirely when both modes are `none` |
+| 7. First deploy | `references/first-deploy-workflow.md` | stop on a failed build or install |
+| 8. Verify | `references/verification.md` | stop and report the exact failed phase |
 
-3. **Create layout**
-   - Read `references/layout.md`.
-   - Create `/var/www/<app-name>` and `/srv/devops/<app-name>`.
-   - Clone the app repo or use the existing checkout only after confirming it is expected.
+## Red Flags — Stop
 
-4. **Prepare `.env`**
-   - Read `references/env-strategy.md`.
-   - Use provided `.env` when available; otherwise generate a minimal production `.env`.
-   - Use server-side secret files where available.
+- About to put a secret value into chat, a log, or a command line.
+- About to request a certificate while DNS does not point at this server.
+- About to run migrations without explicit approval.
+- Reusing an existing app path because it looks like the right place.
 
-5. **Generate Docker files**
-   - Read `references/templates.md`.
-   - Generate Dockerfile, nginx config, Docker Compose, and optional run script.
-   - Use project-level Compose commands; do not build only one service unless debugging.
+Each of these means: stop and resolve it before continuing.
 
-6. **Workers**
-   - Read `references/workers.md` if workers or scheduler are requested.
-   - Runtime commands such as `php artisan queue:restart` and `pm2 start` must run as `www-data`.
+## Common Mistakes
 
-7. **First deploy**
-   - Read `references/first-deploy-workflow.md`.
-   - Run `docker compose up -d --build` for the whole project.
-   - Run Composer, optional npm, and Artisan setup inside containers.
+| Mistake | Consequence | Instead |
+|---|---|---|
+| `composer`, `npm`, or `artisan` on the host | wrong PHP version and wrong file ownership | run inside the container |
+| `source /root/server-secrets/<app>.env` | shell metacharacters inside values execute | parse as data, see `references/env-strategy.md` |
+| `docker compose up -d --build web` | nginx and workers keep stale project state | build the whole project |
+| Assuming `npm` exists | the build fails on API-only apps | run npm only when `package.json` exists and assets are wanted |
+| Running `php artisan` as root | `storage/` ends up root-owned and the app breaks later | run as `www-data` |
+| `chown` on the host | host UID/GID does not match the container | chown inside the container |
+| Inventing a supervisor or PM2 process list | wrong processes, silent breakage | use only a project-provided config, see `references/workers.md` |
 
-8. **Verify**
-   - Read `references/verification.md`.
-   - Stop on failed verification and report the exact failed phase.
+## Report
 
-## Reporting
+Fill in every field. Write `skipped: <reason>` instead of dropping a field.
 
-Final reports should include:
-
-- app path and devops path;
-- domain and container names;
-- worker/scheduler mode;
-- commands completed at a high level;
-- verification results;
-- location of secret files without printing secret values;
-- any skipped optional phase and why.
+```text
+App path:        /var/www/<app-name>
+DevOps path:     /srv/devops/<app-name>
+Domain:          <domain>
+Containers:      <names>
+Worker mode:     <none|artisan-queue|supervisor|pm2>
+Scheduler mode:  <none|artisan-schedule-work|cron>
+Completed:       <phases run>
+Skipped:         <phase: reason>
+Verification:    <result per check in references/verification.md>
+Secret files:    <paths only, never values>
+```
