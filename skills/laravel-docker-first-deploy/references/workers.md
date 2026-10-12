@@ -2,7 +2,7 @@
 
 Workers are optional. Default: no workers and no scheduler.
 
-All Laravel runtime commands run as `www-data` unless the project explicitly uses another runtime user. Worker services use the same image as `web`; `run.sh` fixes permissions and then `exec`s the service's `command` (see `templates.md`). They join `backend` and `db`, never `egress` or a network shared with another app.
+All Laravel runtime commands run as `www-data` unless the project explicitly uses another runtime user. Worker services use the same image as `web`; `run.sh` fixes permissions and then `exec`s the service's `command` (see `templates.md`). They join `db`, plus `<app-name>_egress` when their jobs send mail or call external APIs (SMTP, Telegram, payment providers), and `backend` only if they talk to services there. Never a network shared with another app.
 
 ## Modes
 
@@ -78,6 +78,8 @@ For `artisan-schedule-work`:
     depends_on:
       - web
     networks:
-      - backend
       - db
+      - egress     # if scheduled tasks send mail or call APIs
 ```
+
+Before enabling a scheduler on an app that already has data, read `php artisan schedule:list` and each task's selection logic: a task that acts on everything "due" can fire a backlog at once on its first run. Run risky ones once by hand first.

@@ -138,6 +138,8 @@ If several stacks mount the same code and use the same DB user, do step 6 first,
 - Run each in exactly one container, as `www-data`: a `scheduler` service with `php artisan schedule:work` (`laravel-docker-first-deploy` `references/workers.md`), not a supervisor loop running `schedule:run` as root in every copy.
 - Turning on a scheduler that has been off for months runs every due task from now on. Read the task list with the user first (`php artisan schedule:list`). Empty list: no scheduler needed, remove the dead supervisor config instead.
 - With several stacks of the same code, the scheduler goes into the stack that stays after step 6.
+- The scheduler container needs `${APP}_db` and, when tasks send mail or call APIs, `${APP}_egress`. Running it with `user: www-data` and the web image (`image: <web image name>`, check `docker inspect ${APP}_web -f '{{.Config.Image}}'`) avoids a rebuild and root-owned cache files.
+- Root-owned files in `storage/framework/cache` or `bootstrap/cache` (from earlier root `artisan` runs) break `schedule:list` and some requests with "Permission denied": `chown -R www-data:www-data storage bootstrap/cache` inside the container first.
 
 ## 9. Sessions
 
