@@ -126,7 +126,7 @@ Follow `hetzner-laravel-docker-server` `references/docker-traefik-mysql.md`, "Mo
    - user used only by this app (several stacks of the same code count as one app once step 6 removed the extras): `RENAME USER '<user>'@'<old host>' TO '<user>'@'172.30.N.%'` for one row, `DROP USER` the other container-IP rows; keep a `@'localhost'` row only if something on the MySQL host uses it;
    - user shared with another app: create a new user for this app (script in `laravel-docker-first-deploy` `references/database.md`), grant only its database, put the new credentials into `.env`, `config:cache`. Revoke the old user's access to this database once nothing uses it.
 3. In the app Compose: web drops `mysql8_network` and `proxy`/`traefik_proxy`, joins `${APP}_db` and, if builds run there, `${APP}_egress`. Workers and scheduler join `backend` and `${APP}_db`.
-4. `sudo docker compose up -d web` (and workers), then verify the DB connection (`php artisan db:show` as `www-data`) and that php-fpm is unreachable from a neighbour (`laravel-docker-first-deploy` `references/verification.md`).
+4. `sudo docker compose up -d web` (and workers), then `sudo docker restart ${APP}_nginx` in the same step: nginx resolves `fastcgi_pass <app>_web:9000` once at start, and if it resolved the name through a network web just left (often `proxy`), every request now fails with 502 "No route to host". Then verify the DB connection (`php artisan db:show` as `www-data`) and that php-fpm is unreachable from a neighbour (`laravel-docker-first-deploy` `references/verification.md`).
 
 Rollback: restore the app Compose `.bak`, `RENAME USER` back, `docker compose up -d web`.
 

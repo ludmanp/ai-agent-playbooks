@@ -59,6 +59,7 @@ Rank each finding and give the evidence line (command and output, secrets masked
 | Moving the web container to `<app>_db` before the DB user allows the new subnet | app loses the database | rename the user right after MySQL joins the network, then recreate web |
 | Removing `egress`-like access the deploy needs | next `composer install` fails | keep `<app>_egress` for web if builds run there |
 | `chown -R root:root` on the checkout without fixing writable dirs | app cannot write cache, sessions, uploads | `storage` and `bootstrap/cache` back to `www-data` in the container |
+| Recreating web on other networks without restarting nginx | nginx keeps the old upstream IP: 502 until restart | `docker restart <app>_nginx` right after the web recreate, then curl |
 | Editing a single-file nginx bind mount and reloading | old config stays (old inode) | recreate nginx, or switch to a directory mount |
 | Changing the deploy flow (root-owned checkout, sudo) without updating the README | next deploy done the old way, ownership drifts back | update the deploy steps in the same change |
 

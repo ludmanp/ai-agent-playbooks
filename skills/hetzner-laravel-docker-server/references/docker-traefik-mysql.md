@@ -236,7 +236,7 @@ The app's Compose joins `<app>_db` as external and uses `DB_HOST=mysql8`.
 
 1. `docker network create --internal --subnet ... <app>_db`, add it to the MySQL Compose file.
 2. In the app Compose replace the shared network with `<app>_db` (plus `<app>_egress` if the container needs internet for composer/npm).
-3. Recreate MySQL (or `docker network connect`), then `RENAME USER '<app>'@'<old>' TO '<app>'@'172.30.N.%'`, then recreate the app container.
+3. Recreate MySQL (or `docker network connect`), then `RENAME USER '<app>'@'<old>' TO '<app>'@'172.30.N.%'`, then recreate the app container and restart its nginx (nginx resolved the PHP container's name at start and keeps the old IP: 502 until restarted).
 4. Check from a neighbour container that the app's php-fpm is unreachable: `docker exec NEIGHBOUR sh -c 'timeout 3 bash -c "</dev/tcp/IP/9000" && echo OPEN || echo blocked'`.
 
 ### Upgrading MySQL within 8.4, or from 8.0
