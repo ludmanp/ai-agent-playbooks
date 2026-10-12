@@ -49,8 +49,23 @@ stat -c '%U:%G %a %n' $CODE $CODE/.env $CODE/storage $CODE/bootstrap/cache
 test -r $CODE/.env && echo ".env readable by $(whoami)"
 sudo git -C $CODE status --porcelain | head -20
 sudo git -C $CODE log --oneline -1
-sudo find $CODE/public $CODE/storage -name '*.php' -newer $CODE/composer.lock | head
+sudo find $CODE/public $CODE/storage -path $CODE/storage/framework -prune -o -name '*.php' -newer $CODE/composer.lock -print | head
 ```
+
+`storage/framework/views` holds compiled Blade templates (`<hash>.php`): expected, hence the prune.
+
+If `git status` lists modified files, decide whether the content changed before calling it a compromise:
+
+```bash
+g(){ sudo git -c safe.directory=$CODE -C $CODE "$@"; }
+g status --porcelain | wc -l
+g status --porcelain | sed 's/.*\.//' | sort | uniq -c | sort -rn | head    # by extension
+g status --porcelain | grep -c '^??'                                       # untracked
+g diff --summary | grep -c 'mode change'                                   # permission-only
+g diff --ignore-all-space --ignore-cr-at-eol --stat | tail -3              # real content changes
+```
+
+Permission-only or line-ending-only changes (often from a `chmod -R` or a checkout with `core.autocrlf`) are noise. Changed or untracked `.php` or `.js` files, or PHP files in `public/` other than `index.php`, need a look at the diff before any hardening.
 
 `git` may refuse with "dubious ownership" for an app-owned checkout; use `sudo git -c safe.directory=$CODE -C $CODE status`.
 
