@@ -1,0 +1,4 @@
+interface:
+  display_name: "Laravel Docker App Hardening"
+  short_description: "Harden an existing Laravel Docker deploy"
+  default_prompt: "Use $laravel-docker-app-hardening to review and harden an existing Laravel app on a Docker/Traefik server."
