@@ -50,6 +50,7 @@ Take the server block from `laravel-docker-first-deploy` `references/templates.m
 - pin the image (`nginx:1.27` instead of `latest`);
 - mounts read-only (`:ro`), and only `storage/app/public` instead of all of `storage/app`;
 - prefer a directory mount for the config.
+- run PHP only for `/index.php` (`location = /index.php`) and return 404 for any other `.php`: vendored plugins often ship sample PHP files under `public/`, and an upload bug would otherwise become code execution. Check first that the app has no other PHP entry points (`sudo find $CODE/public -name '*.php'`).
 
 ```bash
 cd $OPS && sudo docker compose config -q

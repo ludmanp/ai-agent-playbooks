@@ -36,6 +36,7 @@ Rank each finding and give the evidence line (command and output, secrets masked
 | Checkout owned by `www-data` | `stat /var/www/<app>` | Medium |
 | Code changed outside git | `sudo git status --porcelain` not empty, unknown PHP files in `public/` | High, stop and investigate |
 | No security headers, `X-Powered-By`, nginx version | `curl -sI` | Medium |
+| nginx executes any `.php` under `public/` | `location ~ \.php$` passes everything to php-fpm; a non-index PHP URL returns 200 | Medium |
 | Scheduler not running, or running in several containers | `ps` on the host, entrypoint commented out, supervisor configs | Medium (functional) |
 | Redirect-only domains running a full app copy | nginx `return 301` in front of a php-fpm with DB access | Medium |
 | Debug settings in production | `APP_DEBUG=true`, `LOG_LEVEL=debug`, `APPLICATION_ENV development` | Medium / Low |

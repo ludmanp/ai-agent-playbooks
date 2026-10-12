@@ -52,7 +52,7 @@ curl -s -o /dev/null -w '%{http_code}\n' http://<domain>/        # 301 or 308
 curl -sI https://<domain>/ | grep -iE '^(HTTP|strict-transport|x-frame|x-content-type|referrer-policy|permissions-policy|content-security|server|x-powered-by)'
 ```
 
-Expected: application response (not Traefik 404), HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, CSP (Report-Only) present; `server: nginx` without a version; no `x-powered-by`. If secret paths are configured, request one and check it is absent from `nginx-logs/access.log`.
+Expected: application response (not Traefik 404), HSTS, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, CSP (Report-Only) present; `server: nginx` without a version; no `x-powered-by`. If secret paths are configured, request one and check it is absent from `nginx-logs/access.log`. Any `.php` URL other than `/index.php` must return 404 (`sudo find /var/www/<app-name>/public -name '*.php'` lists candidates).
 
 ## Files and Permissions
 

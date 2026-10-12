@@ -131,10 +131,14 @@ server {
         try_files $uri $uri/ /index.php?$query_string;
     }
 
+    # Only the front controller runs PHP. Any other .php under public/ (plugin samples,
+    # an uploaded file) gets 404 instead of being executed.
     location ~ \.php$ {
-        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        return 404;
+    }
+
+    location = /index.php {
         fastcgi_pass <app-name>_web:9000;
-        fastcgi_index index.php;
         include fastcgi_params;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_hide_header X-Powered-By;
