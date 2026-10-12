@@ -81,11 +81,20 @@ First find what the app writes outside `storage` and `bootstrap/cache` (uploads 
 sudo find $CODE -path $CODE/storage -prune -o -path $CODE/bootstrap/cache -prune -o -path $CODE/vendor -prune -o -path $CODE/node_modules -prune -o -user www-data -newer $CODE/composer.lock -print | head
 ```
 
-Keep those paths `www-data`, chown the rest:
+Then find files and directories the app can read today only because it owns them. After `chown root:root` they lock the app out (a `bootstrap` left at `700` by an old `chmod -R 700` gives HTTP 500 on every request):
+
+```bash
+sudo find $CODE -path $CODE/storage -prune -o -path $CODE/bootstrap/cache -prune -o -path $CODE/.git -prune -o -path $CODE/.env -prune -o \( -type d ! -perm -o=rx -o -type f ! -perm -o=r \) -print | head
+```
+
+Open each hit to `755` (directories) or `644` (files) as part of the change. Keep those paths `www-data`, chown the rest, and roll back automatically if the site stops answering:
 
 ```bash
 sudo chown -R root:root $CODE
+sudo chown 0:33 $CODE/.env && sudo chmod 640 $CODE/.env      # chown -R reset its group
 sudo docker exec ${APP}_web sh -c 'chown -R www-data:www-data storage bootstrap/cache'
+code=$(curl -s -o /dev/null -w '%{http_code}' https://<domain>/); echo $code
+[ "$code" = 200 ] || { sudo chown -R www-data:www-data $CODE; sudo chown 0:33 $CODE/.env; echo ROLLED BACK; }
 sudo git -C $CODE status --porcelain | head      # git now works for root without safe.directory
 ```
 
