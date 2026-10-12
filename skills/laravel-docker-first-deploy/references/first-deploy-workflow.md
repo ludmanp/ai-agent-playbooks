@@ -1,76 +1,77 @@
 # First Deploy Workflow
 
-Run all app build/setup commands inside containers.
+Run all app build and setup commands inside containers, through `sudo docker`. Build steps (composer, npm) run as root in the container because the checkout is root-owned; Artisan runs as `www-data`.
 
 From the devops directory:
 
 ```bash
 cd /srv/devops/<app-name>
-docker compose up -d --build
+sudo docker compose config -q
+sudo docker compose up -d --build
 ```
-
-Use `sudo docker` if required by the server.
 
 ## Composer
 
-Run Composer inside the web container:
-
 ```bash
-docker compose exec web composer install --no-dev --optimize-autoloader
+sudo docker compose exec web composer install --no-dev --optimize-autoloader
 ```
 
-If private Composer dependencies require GitHub OAuth, pass `GITHUB_OAUTH_TOKEN` via environment or Docker Compose. Do not print token values.
+Private dependencies: pass the token for this command only, read from the root-only secrets file, never printed:
+
+```bash
+sudo sh -c 'tok=$(awk -F= '"'"'$1=="GITHUB_OAUTH_TOKEN"{sub(/^[^=]*=/,"");print;exit}'"'"' /root/server-secrets/<app-name>.env);
+  cd /srv/devops/<app-name> && COMPOSER_AUTH="{\"github-oauth\":{\"github.com\":\"$tok\"}}" docker compose exec -e COMPOSER_AUTH web composer install --no-dev --optimize-autoloader'
+```
 
 ## Frontend Build
 
-Do not assume npm exists.
-
-Only run npm when `package.json` exists and the user wants frontend assets built:
+Do not assume npm exists. Only run npm when `package.json` exists and the user wants frontend assets built:
 
 ```bash
-docker compose exec web npm ci
-docker compose exec web npm run build
+sudo docker compose exec web sh -c 'npm ci && npm run build'
 ```
 
-If the project uses Yarn, pnpm, Vite, Mix, or a custom build command, ask for the command or infer it from `package.json` scripts.
+If the project uses Yarn, pnpm or a custom build command, ask for it or infer it from `package.json` scripts.
 
 ## Permissions
 
-Run inside the web container:
+`run.sh` sets them on every start. After the first install, once more:
 
 ```bash
-docker compose exec web sh -lc 'chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache'
+sudo docker compose exec web sh -c 'chown -R www-data:www-data storage bootstrap/cache && chmod -R ug+rwX storage bootstrap/cache'
 ```
 
 ## Laravel First-Run Commands
 
-Run Laravel runtime commands as `www-data`:
+`APP_KEY` is set in `.env` already (`env-strategy.md`). If a user-provided `.env` lacks it, generate one with `openssl rand -base64 32` and write `APP_KEY=base64:...` into the file as root; do not make `.env` writable for `key:generate`.
 
 ```bash
-docker compose exec web su -s /bin/sh -c "php artisan key:generate --force" www-data
-docker compose exec web su -s /bin/sh -c "php artisan storage:link" www-data
-docker compose exec web su -s /bin/sh -c "php artisan migrate --force" www-data
-docker compose exec web su -s /bin/sh -c "php artisan optimize" www-data
+sudo docker compose exec -u www-data web php artisan storage:link
+sudo docker compose exec -u www-data web php artisan migrate --force
+sudo docker compose exec -u www-data web php artisan optimize
 ```
 
-Only run `key:generate` if `APP_KEY` is missing or generated `.env` intentionally left it blank.
+- Run migrations only when the user approves first-deploy database changes.
+- If `optimize` fails due to app-specific config, run `config:cache`, `route:cache`, `view:cache` separately and report which one fails.
 
-Only run migrations when the user approves first-deploy database changes.
+## Production Checks
 
-If `optimize` fails due to app-specific config, capture the error and decide whether to run narrower commands:
-
-```bash
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-```
+- Debug tools must not load in production: `sudo docker compose exec -u www-data web php artisan about` and `composer show` for `laravel/telescope`, `barryvdh/laravel-debugbar`, `spatie/laravel-ignition`. Telescope in `require` (not `require-dev`) needs to be disabled or gated.
+- `trustProxies(at: '*')` in `bootstrap/app.php` is safe behind the server's Traefik: Traefik replaces a client-sent `X-Forwarded-For` unless `forwardedHeaders.trustedIPs` or `insecure` is configured, and Laravel only trusts the nearest hop (nginx).
+- Add the database to the server's dump timer (`database.md`, Daily Dumps).
 
 ## Project-Level Build Rule
 
-Prefer:
+Prefer `sudo docker compose up -d --build` over building only `web`, because nginx and worker services should be created from the same project state.
+
+## Later Updates (for the README the user keeps)
 
 ```bash
-docker compose up -d --build
+cd /var/www/<app-name> && sudo git pull --ff-only
+cd /srv/devops/<app-name>
+sudo docker compose exec web composer install --no-dev -o
+sudo docker compose exec web sh -c 'npm ci && npm run build'     # if applicable
+sudo docker compose exec -u www-data web php artisan migrate --force
+sudo docker compose exec -u www-data web php artisan optimize
+sudo docker compose exec -u www-data web php artisan queue:restart   # if workers
 ```
-
-over building only `web`, because nginx and optional worker services should be created from the same project state.

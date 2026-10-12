@@ -4,15 +4,15 @@ Collect these before starting. Ask incrementally; do not demand every optional v
 
 ## Required
 
-- SSH target or active server session.
-- App name, lowercase slug, for paths and container names.
+- SSH target (deploy user with sudo) or active server session.
+- App name, lowercase slug, for paths, container names, the DB network and the DB user.
 - Production domain.
-- Git repository URL.
+- Git repository URL and a read-only deploy key if it is private.
 - Branch or tag to deploy.
 - PHP version, default from project if known.
 - Database source:
-  - existing MySQL container/network credentials file; or
-  - DB host, database, username, and password.
+  - new database and user on the shared `mysql8` container (default, see `database.md`); or
+  - existing database credentials, whose user must be limited to the app subnet.
 - `.env` strategy:
   - user-provided `.env`; or
   - generate minimal production `.env`.
@@ -22,12 +22,14 @@ Collect these before starting. Ask incrementally; do not demand every optional v
 - App path, default `/var/www/<app-name>`.
 - DevOps path, default `/srv/devops/<app-name>`.
 - Web root, default `public`.
-- Traefik network, default `proxy`.
-- MySQL network, default `mysql8_network`.
+- Traefik network, default `proxy`; certificate resolver name, default `http` (check what existing sites use).
+- DB network subnet, a free /24 (see `database.md`).
+- Whether the web container needs outbound internet (composer, npm): then `<app-name>_egress`.
 - Container name prefix, default `<app-name>`.
 - Image tag, default `<app-name>/<app-name>:latest`.
 - Node version, only if the project has a frontend build.
 - Whether private Composer dependencies require `GITHUB_OAUTH_TOKEN`.
+- URL paths that carry secrets (one-time tokens, signed links) to keep out of access logs.
 - Whether migrations should run during first deploy.
 - Worker mode: `none`, `artisan-queue`, `supervisor`, or `pm2`.
 - Scheduler mode: `none`, `artisan-schedule-work`, or `cron`.
@@ -37,6 +39,10 @@ Collect these before starting. Ask incrementally; do not demand every optional v
 
 - Do not ask the user to paste secrets into chat unless unavoidable.
 - Prefer generating or reading secrets on the server.
-- Store deployment secrets in a root-only server file such as `/root/server-secrets/<app-name>.env`.
-- Store app `.env` at `/var/www/<app-name>/.env` with restrictive permissions.
+- Deployment secrets live in the app's own root-only file `/root/server-secrets/<app-name>.env` (700 directory, 600 file). One file per app; do not read another app's or a shared credentials file.
+- The app `.env` lives at `/var/www/<app-name>/.env`, owner `root`, group `www-data` (GID 33), mode 640: readable by the app, not writable.
 - Do not `source` `.env` files that contain secrets; parse them as data.
+
+## sudo
+
+The deploy user's sudo asks for a password. An agent's non-interactive SSH channel cannot type it. If `sudo -n true` fails, either the user runs the phase's commands in an interactive terminal (`ssh -t deploy@HOST 'sudo ...'`), or the agent works through a root session the user still allows. Agree which before phase 2.

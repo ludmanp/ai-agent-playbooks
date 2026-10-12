@@ -2,37 +2,36 @@
 
 Before writing files, verify the target server is ready.
 
-## SSH
+## SSH and sudo
 
 ```bash
 whoami
 hostname
-sudo -n true && echo sudo-ok
+sudo -n true && echo sudo-ok || echo "sudo needs a password, see inputs.md"
+id -nG | grep -qw docker && echo "WARNING: user is in the docker group"
 ```
 
-If the user expects a non-root deploy user, verify it is in the `docker` group or can use `sudo docker`.
+Do not add the deploy user to the `docker` group: it is root without a password. Use `sudo docker`.
 
-## Docker and Compose
+## Docker, Traefik, MySQL
 
 ```bash
-docker --version
-docker compose version
-sudo systemctl status docker --no-pager
+sudo docker version -f '{{.Server.Version}}'
+sudo docker compose version
+sudo docker ps --format '{{.Names}} {{.Image}}' | grep -E 'traefik|mysql'
+sudo docker network inspect proxy >/dev/null && echo proxy-ok
+sudo docker port mysql8          # expect 127.0.0.1 only
 ```
 
-Use `sudo docker` if the SSH user is not in the Docker group.
+Stop and send the user to `hetzner-laravel-docker-server` if:
 
-## Networks
+- there is no Traefik v3 or no `proxy` network;
+- MySQL is published on `0.0.0.0` or has users with host `'%'`;
+- the server's model still has all apps on one shared DB network and the user wants that kept (then confirm explicitly; this skill does not put PHP containers on it).
 
-```bash
-docker network ls
-docker network inspect proxy >/dev/null
-docker network inspect mysql8_network >/dev/null
-```
+Note the certificate resolver name existing sites use (`sudo docker inspect <some>_nginx | grep certresolver`).
 
-If a required external network is missing, stop and ask whether to create it or use a different network.
-
-## DNS and Traefik
+## DNS
 
 Check the app domain resolves to the server:
 
@@ -42,15 +41,16 @@ dig +short app.example.com AAAA
 curl -I http://app.example.com
 ```
 
-If DNS does not point at the server, stop before requesting certificates.
+The A record must equal the server's public IP (`curl -s https://ifconfig.me` on the server); an AAAA record must equal its IPv6 or be absent. Otherwise stop before requesting certificates.
 
 ## First Deploy Safety
 
-Check for existing app or devops directories:
+Check for existing app or devops directories and a taken network name:
 
 ```bash
 test -e /var/www/<app-name> && echo app-path-exists
 test -e /srv/devops/<app-name> && echo devops-path-exists
+sudo docker network inspect <app-name>_db >/dev/null 2>&1 && echo db-network-exists
 ```
 
-If either exists and is not empty, ask the user before reusing it. This skill is for first deploy, not update deploys.
+If any exists, ask the user before reusing it. This skill is for first deploy, not update deploys.

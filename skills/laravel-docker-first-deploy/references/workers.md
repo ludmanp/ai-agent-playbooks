@@ -2,7 +2,7 @@
 
 Workers are optional. Default: no workers and no scheduler.
 
-All Laravel runtime commands should run as `www-data` unless the project explicitly uses another runtime user.
+All Laravel runtime commands run as `www-data` unless the project explicitly uses another runtime user. Worker services use the same image as `web`; `run.sh` fixes permissions and then `exec`s the service's `command` (see `templates.md`). They join `backend` and `db`, never `egress` or a network shared with another app.
 
 ## Modes
 
@@ -12,8 +12,6 @@ No worker services or startup commands.
 
 ### artisan-queue
 
-Add a separate service using the same app image:
-
 ```yaml
   queue:
     image: <app-name>/<app-name>:latest
@@ -22,21 +20,19 @@ Add a separate service using the same app image:
     working_dir: /app
     volumes:
       - /var/www/<app-name>:/app
-      - /srv/devops/<app-name>:/srv/devops:ro
-    command: >
-      sh -lc 'su -s /bin/sh -c "php artisan queue:work --sleep=3 --tries=3 --timeout=90" www-data'
+    command: ["su", "-s", "/bin/sh", "-c", "php artisan queue:work --sleep=3 --tries=3 --timeout=90", "www-data"]
     depends_on:
       - web
     networks:
       - backend
-      - database
+      - db
 ```
+
+After a deploy, `php artisan queue:restart` (as `www-data`) makes workers load the new code.
 
 ### supervisor
 
-Use only when the project already has or the user provides a supervisor config. Do not invent complex supervisor process lists without project context.
-
-Run supervisord in a dedicated service or as the web entrypoint only when requested.
+Use only when the project already has or the user provides a supervisor config. Do not invent complex supervisor process lists without project context. Install `supervisor` in the image only for this mode, and run it as the service `command`.
 
 ### pm2
 
@@ -44,12 +40,17 @@ Use only when the project has a PM2 process file, commonly `pm2-worker.yml`.
 
 Requirements:
 
-- Node installed in the PHP image.
-- `pm2` installed globally.
+- Node and `pm2` installed in the image (see `templates.md`).
 - `/var/www/.pm2` exists and belongs to `www-data`.
 - PM2 commands run as `www-data`.
 
-Example startup commands in `/srv/devops/<app-name>/startup-www-data.sh`:
+Startup commands in `/srv/devops/<app-name>/startup-www-data.sh`, mounted into `web` read-only:
+
+```yaml
+    volumes:
+      - /var/www/<app-name>:/app
+      - ./startup-www-data.sh:/srv/devops/startup-www-data.sh:ro
+```
 
 ```bash
 mkdir -p /var/www/.pm2
@@ -57,13 +58,13 @@ pm2 start /app/pm2-worker.yml
 php /app/artisan queue:restart
 ```
 
-The parent `run.sh` must execute this script as `www-data`.
+`run.sh` runs this script as `www-data` before php-fpm.
 
 ## Scheduler
 
 Default: no scheduler.
 
-For `artisan-schedule-work`, add a separate service:
+For `artisan-schedule-work`:
 
 ```yaml
   scheduler:
@@ -73,12 +74,10 @@ For `artisan-schedule-work`, add a separate service:
     working_dir: /app
     volumes:
       - /var/www/<app-name>:/app
-      - /srv/devops/<app-name>:/srv/devops:ro
-    command: >
-      sh -lc 'su -s /bin/sh -c "php artisan schedule:work" www-data'
+    command: ["su", "-s", "/bin/sh", "-c", "php artisan schedule:work", "www-data"]
     depends_on:
       - web
     networks:
       - backend
-      - database
+      - db
 ```
